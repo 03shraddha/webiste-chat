@@ -136,9 +136,10 @@ async def stream_rag_response(
 
         # If retrieval returned nothing, tell the user rather than hallucinating
         if not context_text.strip():
-            yield f"data: {json.dumps({'type': 'token', 'content': \"I don't have any relevant content from this website to answer that question.\"})}\n\n"
-            yield f"data: {json.dumps({'type': 'sources', 'sources': []})}\n\n"
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            no_content_msg = "I don't have any relevant content from this website to answer that question."
+            yield "data: " + json.dumps({"type": "token", "content": no_content_msg}) + "\n\n"
+            yield "data: " + json.dumps({"type": "sources", "sources": []}) + "\n\n"
+            yield "data: " + json.dumps({"type": "done"}) + "\n\n"
             return
 
         # 3. Build system prompt
