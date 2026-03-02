@@ -1,7 +1,10 @@
 import asyncio
 import random
+import urllib.request
+import xml.etree.ElementTree as ET
 from collections import deque
 from typing import Callable, Awaitable
+from urllib.parse import urljoin
 
 from playwright.async_api import async_playwright, Page, BrowserContext
 
@@ -11,7 +14,86 @@ from app.crawler.url_utils import (
     extract_domain,
     extract_links,
     is_valid_crawlable_url,
+    is_same_domain,
 )
+
+_SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
+_SITEMAP_CANDIDATES = ["/sitemap.xml", "/sitemap_index.xml", "/sitemap/sitemap.xml"]
+
+
+def _fetch_sitemap_urls_sync(base_url: str, base_domain: str, max_urls: int) -> list[str]:
+    """
+    Synchronous sitemap fetch (run in executor).
+    Tries common sitemap paths, parses <loc> elements, returns same-domain URLs.
+    Handles both sitemap index files and regular sitemaps.
+    """
+    found: list[str] = []
+
+    def _parse_sitemap_xml(content: str) -> list[str]:
+        urls = []
+        try:
+            root = ET.fromstring(content)
+            # Try with namespace first, then without
+            for ns_prefix in [f"{{{_SITEMAP_NS}}}", ""]:
+                locs = root.findall(f".//{ns_prefix}loc")
+                if locs:
+                    for loc in locs:
+                        u = (loc.text or "").strip()
+                        if u:
+                            urls.append(u)
+                    break
+        except ET.ParseError:
+            pass
+        return urls
+
+    def _fetch_url(url: str) -> str | None:
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0 (compatible; SitemapBot/1.0)"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                if resp.status == 200:
+                    ct = resp.headers.get("Content-Type", "")
+                    if "html" in ct and "xml" not in ct:
+                        return None  # Skip HTML pages masquerading as sitemap
+                    return resp.read().decode("utf-8", errors="ignore")
+        except Exception:
+            pass
+        return None
+
+    for path in _SITEMAP_CANDIDATES:
+        sitemap_url = urljoin(base_url, path)
+        content = _fetch_url(sitemap_url)
+        if not content:
+            continue
+
+        raw_urls = _parse_sitemap_xml(content)
+        if not raw_urls:
+            continue
+
+        print(f"[CRAWLER] Sitemap found at {sitemap_url} ({len(raw_urls)} entries)")
+
+        for u in raw_urls:
+            if len(found) >= max_urls:
+                break
+            # Sitemap index files contain links to other sitemaps — recurse one level
+            if u.endswith(".xml"):
+                sub_content = _fetch_url(u)
+                if sub_content:
+                    for sub_u in _parse_sitemap_xml(sub_content):
+                        if (
+                            len(found) < max_urls
+                            and is_same_domain(sub_u, base_domain)
+                            and is_valid_crawlable_url(sub_u)
+                        ):
+                            found.append(sub_u)
+            elif is_same_domain(u, base_domain) and is_valid_crawlable_url(u):
+                found.append(u)
+
+        if found:
+            break  # Stop at first working sitemap
+
+    return found
 
 
 async def crawl_site(
@@ -22,6 +104,7 @@ async def crawl_site(
 ) -> list[dict]:
     """
     BFS crawl of a website using Playwright.
+    Seeds queue from sitemap.xml if available, falls back to link-following BFS.
 
     Args:
         start_url: The seed URL to start crawling from.
@@ -30,14 +113,30 @@ async def crawl_site(
         progress_callback: Async callable(pages_crawled, current_url).
 
     Returns:
-        List of page dicts: {url, title, content, meta_description, headings}
+        List of page dicts: {url, title, content, sections, meta_description, headings}
     """
     base_domain = extract_domain(start_url)
-    queue: deque[tuple[str, int]] = deque([(normalize_url(start_url), 0)])
     visited: set[str] = set()
     pages: list[dict] = []
     consecutive_errors = 0
     MAX_CONSECUTIVE_ERRORS = 5
+
+    # Try sitemap first — much more efficient than BFS for well-structured sites
+    loop = asyncio.get_event_loop()
+    sitemap_urls = await loop.run_in_executor(
+        None, _fetch_sitemap_urls_sync, start_url, base_domain, max_pages * 2
+    )
+
+    if sitemap_urls:
+        # Seed queue from sitemap (depth=1 since we already know the URLs)
+        queue: deque[tuple[str, int]] = deque(
+            [(normalize_url(u), 1) for u in sitemap_urls]
+        )
+        # Always include start URL at depth 0
+        queue.appendleft((normalize_url(start_url), 0))
+        print(f"[CRAWLER] Seeded queue with {len(sitemap_urls)} sitemap URLs")
+    else:
+        queue = deque([(normalize_url(start_url), 0)])
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -118,8 +217,8 @@ async def crawl_site(
                     consecutive_errors = 0  # reset on success
                     await progress_callback(len(pages), url)
 
-                # Enqueue child links within depth limit
-                if depth < max_depth:
+                # Enqueue child links within depth limit (skip if sitemap already seeded)
+                if depth < max_depth and not sitemap_urls:
                     links = await extract_links(page, base_domain)
                     for link in links:
                         norm_link = normalize_url(link)

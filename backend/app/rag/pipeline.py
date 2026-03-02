@@ -25,11 +25,16 @@ def build_system_prompt(site_name: str, site_url: str, brand_profile: dict) -> s
     return f"""You are a helpful assistant for {site_name} ({site_url}).
 
 CRITICAL RULES — follow these without exception:
-1. Answer ONLY using information from the CONTEXT chunks provided in each message.
+1. Answer ONLY using information from the numbered [Source N] chunks provided in each message.
 2. Do NOT use your own general knowledge about the world, the company, or the topic.
-3. If the context does not contain sufficient information to answer the question, respond with: "I don't have information about that from this website's content."
-4. Always ground your answer in the provided context. Do not speculate or fill gaps with assumed knowledge.
-5. When relevant, mention which page the information comes from.
+3. If the context does not contain sufficient information, respond: "I don't have information about that from this website's content."
+4. Do not speculate or fill gaps with assumed knowledge.
+
+CITATION RULES — mandatory:
+- When you state a specific fact, price, feature, or claim, add an inline citation like [1], [2], etc.
+- The number must match the [Source N] label of the chunk you are drawing from.
+- You may cite multiple sources for one sentence: "The plan costs $99 [1] and supports 5 users [2]."
+- Do not cite if you are summarising or making a general introductory statement.
 
 BRAND VOICE: {brand_voice}
 KEY TERMINOLOGY: Use these exact terms when applicable: {key_terms_str}
@@ -37,40 +42,51 @@ KEY TERMINOLOGY: Use these exact terms when applicable: {key_terms_str}
 Writing style:
 - Match the brand's tone and formality level as described above
 - Be concise but complete — avoid unnecessary padding
-- Synthesize information from multiple sources when relevant
-- Cite source pages naturally within your answer when helpful"""
+- Synthesize information from multiple sources when relevant"""
 
 
-def format_context_chunks(retrieval_results: dict) -> tuple[str, list[str]]:
+def format_context_chunks(retrieval_results: dict) -> tuple[str, list[dict]]:
     """
-    Format ChromaDB query results into a readable context string.
-    Returns (context_text, list_of_unique_source_urls).
+    Format retrieval results into a context string with numbered [Source N] labels.
+    Returns (context_text, list_of_source_objects).
+
+    Each source object: {url, title, heading_path, excerpt}
     """
     docs = retrieval_results.get("documents", [[]])[0]
     metas = retrieval_results.get("metadatas", [[]])[0]
 
     context_parts: list[str] = []
-    source_urls: list[str] = []
+    sources: list[dict] = []
+    seen_urls: set[str] = set()
 
     for i, (doc, meta) in enumerate(zip(docs, metas)):
         source_url = meta.get("source_url", "")
         page_title = meta.get("page_title", "")
-        heading = meta.get("heading_context", "")
+        heading_path = meta.get("heading_path", "") or meta.get("heading_context", "")
+        excerpt = meta.get("excerpt", doc[:220].strip())
 
+        # Build context header the LLM sees
         header = f"[Source {i + 1}]"
         if page_title:
             header += f" {page_title}"
-        if heading:
-            header += f" | {heading}"
+        if heading_path:
+            header += f" › {heading_path}"
         if source_url:
             header += f"\nURL: {source_url}"
 
         context_parts.append(f"{header}\n{doc}")
 
-        if source_url and source_url not in source_urls:
-            source_urls.append(source_url)
+        # Deduplicate sources by URL, but keep heading_path/excerpt from first occurrence
+        if source_url and source_url not in seen_urls:
+            seen_urls.add(source_url)
+            sources.append({
+                "url": source_url,
+                "title": page_title,
+                "heading_path": heading_path,
+                "excerpt": excerpt,
+            })
 
-    return "\n\n---\n\n".join(context_parts), source_urls
+    return "\n\n---\n\n".join(context_parts), sources
 
 
 async def stream_rag_response(
@@ -85,10 +101,10 @@ async def stream_rag_response(
     Async generator yielding SSE-formatted strings.
 
     Events:
-        data: {"type": "token", "content": "..."}   — streaming text token
-        data: {"type": "sources", "urls": [...]}     — source URLs after completion
-        data: {"type": "done"}                       — final signal
-        data: {"type": "error", "message": "..."}    — on failure
+        data: {"type": "token", "content": "..."}
+        data: {"type": "sources", "sources": [{url, title, heading_path, excerpt}]}
+        data: {"type": "done"}
+        data: {"type": "error", "message": "..."}
     """
     try:
         # Validate and sanitize message
@@ -116,12 +132,12 @@ async def stream_rag_response(
                 return
             raise
 
-        context_text, source_urls = format_context_chunks(results)
+        context_text, sources = format_context_chunks(results)
 
         # If retrieval returned nothing, tell the user rather than hallucinating
         if not context_text.strip():
             yield f"data: {json.dumps({'type': 'token', 'content': \"I don't have any relevant content from this website to answer that question.\"})}\n\n"
-            yield f"data: {json.dumps({'type': 'sources', 'urls': []})}\n\n"
+            yield f"data: {json.dumps({'type': 'sources', 'sources': []})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
             return
 
@@ -157,8 +173,8 @@ async def stream_rag_response(
             if delta.content:
                 yield f"data: {json.dumps({'type': 'token', 'content': delta.content})}\n\n"
 
-        # 7. Send source citations
-        yield f"data: {json.dumps({'type': 'sources', 'urls': source_urls})}\n\n"
+        # 7. Send rich source citations
+        yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     except Exception as e:

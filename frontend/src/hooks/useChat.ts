@@ -78,7 +78,7 @@ export function useChat(sessionId: string) {
               accumulated += data.content;
               updateLastMessage(sessionId, { content: accumulated });
             } else if (data.type === "sources") {
-              updateLastMessage(sessionId, { sources: data.urls });
+              updateLastMessage(sessionId, { sources: data.sources ?? [] });
             } else if (data.type === "done") {
               updateLastMessage(sessionId, { isStreaming: false });
             } else if (data.type === "error") {

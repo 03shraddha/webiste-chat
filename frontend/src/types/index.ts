@@ -7,11 +7,18 @@ export interface Session {
   created_at: string;
 }
 
+export interface Source {
+  url: string;
+  title: string;
+  heading_path: string;  // e.g. "Products > Pricing > Enterprise"
+  excerpt: string;       // first ~220 chars of the retrieved chunk
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  sources?: string[];
+  sources?: Source[];
   isStreaming?: boolean;
 }
 

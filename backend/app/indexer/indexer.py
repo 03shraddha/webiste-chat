@@ -36,7 +36,8 @@ def _docs_path(session_id: str) -> Path:
 
 def index_pages(session_id: str, pages: list[dict]) -> int:
     """
-    Chunks all pages, embeds them, and stores in an HNSW index + JSON file.
+    Chunks all pages by section (preserving heading context), embeds them,
+    and stores in an HNSW index + JSON file.
     Returns total number of chunks indexed.
     """
     all_documents: list[str] = []
@@ -46,22 +47,52 @@ def index_pages(session_id: str, pages: list[dict]) -> int:
         if not page.get("content"):
             continue
 
-        chunks = recursive_text_split(
-            page["content"],
-            chunk_size=settings.chunk_size,
-            overlap=settings.chunk_overlap,
-        )
+        page_title = page.get("title", "")
+        page_url = page["url"]
 
-        heading_context = " > ".join(page.get("headings", [])[:3])
+        sections = page.get("sections") or []
 
-        for i, chunk in enumerate(chunks):
-            all_documents.append(chunk)
-            all_metadatas.append({
-                "source_url": page["url"],
-                "page_title": page.get("title", ""),
-                "chunk_index": i,
-                "heading_context": heading_context,
-            })
+        if sections:
+            # Chunk each section independently — every chunk inherits its section heading
+            chunk_index = 0
+            for section in sections:
+                heading = section.get("heading", "")
+                text = section.get("text", "")
+                if not text.strip():
+                    continue
+
+                chunks = recursive_text_split(
+                    text,
+                    chunk_size=settings.chunk_size,
+                    overlap=settings.chunk_overlap,
+                )
+                for chunk in chunks:
+                    all_documents.append(chunk)
+                    all_metadatas.append({
+                        "source_url": page_url,
+                        "page_title": page_title,
+                        "heading_path": heading,  # exact section heading for this chunk
+                        "excerpt": chunk[:220].strip(),  # first 220 chars for citation UI
+                        "chunk_index": chunk_index,
+                    })
+                    chunk_index += 1
+        else:
+            # Fallback: chunk the full content string (no section info)
+            chunks = recursive_text_split(
+                page["content"],
+                chunk_size=settings.chunk_size,
+                overlap=settings.chunk_overlap,
+            )
+            page_headings = " > ".join(page.get("headings", [])[:3])
+            for i, chunk in enumerate(chunks):
+                all_documents.append(chunk)
+                all_metadatas.append({
+                    "source_url": page_url,
+                    "page_title": page_title,
+                    "heading_path": page_headings,
+                    "excerpt": chunk[:220].strip(),
+                    "chunk_index": i,
+                })
 
     if not all_documents:
         return 0

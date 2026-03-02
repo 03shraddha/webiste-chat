@@ -5,6 +5,22 @@ interface MessageBubbleProps {
   message: Message;
 }
 
+/** Parse text with [N] inline citation markers into React nodes with styled superscripts. */
+function renderWithCitations(text: string) {
+  const parts = text.split(/(\[\d{1,2}\])/g);
+  return parts.map((part, i) => {
+    const match = part.match(/^\[(\d{1,2})\]$/);
+    if (match) {
+      return (
+        <sup key={i} className="inline-citation">
+          {match[1]}
+        </sup>
+      );
+    }
+    return part;
+  });
+}
+
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
@@ -30,13 +46,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         alignItems: isUser ? "flex-end" : "flex-start",
       }}>
         <div className={isUser ? "bubble-user" : "bubble-ai"}>
-          {message.content}
+          {isUser ? message.content : renderWithCitations(message.content)}
           {message.isStreaming && <span className="stream-cursor" />}
         </div>
 
         {!isUser && message.sources && message.sources.length > 0 && (
           <div style={{ marginTop: "6px", paddingLeft: "4px" }}>
-            <SourceCitations urls={message.sources} />
+            <SourceCitations sources={message.sources} />
           </div>
         )}
       </div>
