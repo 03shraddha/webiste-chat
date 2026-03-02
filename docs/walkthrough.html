@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Website Chat — Code Walkthrough</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Josefin+Sans:wght@300;400;600&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #faf5f0;
+      --card: #fff9f5;
+      --crimson: #c0283e;
+      --crimson-dim: rgba(192,40,62,0.10);
+      --crimson-mid: rgba(192,40,62,0.22);
+      --ink: #1e1520;
+      --ink-dim: rgba(30,21,32,0.55);
+      --ink-dimmer: rgba(30,21,32,0.30);
+      --border: rgba(192,40,62,0.15);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: 18px;
+      line-height: 1.65;
+      padding: 0 0 80px;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      background: var(--crimson);
+      color: #faf5f0;
+      padding: 60px 40px 52px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 30% 60%, rgba(255,255,255,0.08) 0%, transparent 60%),
+                  radial-gradient(ellipse at 80% 20%, rgba(255,255,255,0.06) 0%, transparent 50%);
+    }
+    .hero-label {
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+      opacity: 0.65; margin-bottom: 16px;
+    }
+    .hero h1 {
+      font-family: 'Fredoka', sans-serif;
+      font-size: clamp(52px, 8vw, 86px);
+      font-weight: 700; line-height: 0.92;
+      margin-bottom: 18px; position: relative;
+    }
+    .hero p {
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
+      opacity: 0.70; position: relative;
+    }
+
+    /* ── Layout ── */
+    .container { max-width: 820px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Section headings ── */
+    .section { margin-top: 60px; }
+    .section-label {
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--crimson); margin-bottom: 6px;
+    }
+    .section h2 {
+      font-family: 'Fredoka', sans-serif;
+      font-size: 30px; font-weight: 700;
+      color: var(--ink); margin-bottom: 14px; line-height: 1.1;
+    }
+    .section > p { color: var(--ink-dim); margin-bottom: 20px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px 26px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 12px rgba(30,21,32,0.05);
+    }
+    .card-title {
+      font-family: 'Fredoka', sans-serif;
+      font-size: 19px; font-weight: 600; color: var(--ink);
+      margin-bottom: 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-title .tag {
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      background: var(--crimson-dim); color: var(--crimson);
+      padding: 2px 8px; border-radius: 99px;
+    }
+    .card p { color: var(--ink-dim); font-size: 16px; }
+    .card code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px; background: var(--crimson-dim);
+      color: var(--crimson); padding: 1px 5px; border-radius: 4px;
+    }
+
+    /* ── File tree ── */
+    .tree {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px 26px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px; line-height: 1.9;
+      color: var(--ink-dim);
+    }
+    .tree .dir { color: var(--crimson); font-weight: 700; }
+    .tree .file { color: var(--ink); }
+    .tree .note { color: var(--ink-dimmer); font-style: italic; font-size: 12px; }
+
+    /* ── Pipeline diagram ── */
+    .pipeline {
+      display: flex; flex-wrap: wrap; gap: 0;
+      align-items: center; margin: 20px 0;
+    }
+    .pipe-step {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      text-align: center;
+      min-width: 110px;
+    }
+    .pipe-step .icon { font-size: 24px; margin-bottom: 4px; }
+    .pipe-step .label {
+      font-family: 'Fredoka', sans-serif;
+      font-size: 15px; color: var(--ink); font-weight: 600;
+    }
+    .pipe-step .sub {
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--ink-dimmer); margin-top: 2px;
+    }
+    .pipe-arrow {
+      font-size: 18px; color: var(--crimson); padding: 0 6px; flex-shrink: 0;
+    }
+
+    /* ── Tech grid ── */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 12px;
+    }
+    .tech-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .tech-card .name {
+      font-family: 'Fredoka', sans-serif;
+      font-size: 17px; font-weight: 600; color: var(--crimson);
+      margin-bottom: 4px;
+    }
+    .tech-card .role {
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase;
+      color: var(--ink-dimmer); margin-bottom: 6px;
+    }
+    .tech-card p { font-size: 15px; color: var(--ink-dim); }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px; background: var(--border); margin: 48px 0;
+    }
+
+    /* ── Highlight box ── */
+    .highlight {
+      background: var(--crimson-dim);
+      border-left: 3px solid var(--crimson);
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px;
+      margin: 16px 0;
+      font-size: 16px; color: var(--ink-dim);
+    }
+    .highlight strong { color: var(--ink); }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 80px;
+      text-align: center;
+      font-family: 'Josefin Sans', sans-serif;
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--ink-dimmer);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <div class="hero">
+    <p class="hero-label">Code Walkthrough</p>
+    <h1>Website<br>Chat</h1>
+    <p>Crawl · Index · Converse — how it all works</p>
+  </div>
+
+  <div class="container">
+
+    <!-- What is it -->
+    <div class="section">
+      <p class="section-label">Overview</p>
+      <h2>What is this?</h2>
+      <p>
+        Website Chat lets you point at any URL, crawl its pages with a real browser,
+        index the content into a local vector store, then have a grounded AI conversation
+        with that site's content — no cloud storage, no hallucination, citations included.
+      </p>
+      <div class="highlight">
+        <strong>The golden rule:</strong> answers are grounded strictly in what was crawled.
+        If the site doesn't say it, the AI won't say it either.
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- File structure -->
+    <div class="section">
+      <p class="section-label">Project Layout</p>
+      <h2>File structure</h2>
+      <p>Monorepo with a Python backend and a React frontend, kept deliberately flat.</p>
+
+      <div class="tree">
+        <span class="dir">website-chat/</span><br>
+        &nbsp;&nbsp;<span class="dir">backend/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">app/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">api/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">crawl.py</span>&nbsp;&nbsp;<span class="note">← POST /api/crawl · SSE status stream</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">chat.py</span>&nbsp;&nbsp;<span class="note">← POST /api/chat → SSE token stream</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">sessions.py</span>&nbsp;&nbsp;<span class="note">← GET / DELETE /api/sessions</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">crawler/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">crawler.py</span>&nbsp;&nbsp;<span class="note">← BFS Playwright crawler</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">extractor.py</span>&nbsp;&nbsp;<span class="note">← JS content extraction</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">url_utils.py</span>&nbsp;&nbsp;<span class="note">← normalise, dedup, filter URLs</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">indexer/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">chunker.py</span>&nbsp;&nbsp;<span class="note">← recursive text splitter</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">embedder.py</span>&nbsp;&nbsp;<span class="note">← sentence-transformers singleton</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">indexer.py</span>&nbsp;&nbsp;<span class="note">← hnswlib CRUD (vector store)</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">rag/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">pipeline.py</span>&nbsp;&nbsp;<span class="note">← retrieve → prompt → stream</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">brand/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">analyzer.py</span>&nbsp;&nbsp;<span class="note">← brand tone via LLM</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">jobs/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">job_store.py</span>&nbsp;&nbsp;<span class="note">← in-memory jobs + sessions.json</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">main.py</span>&nbsp;&nbsp;<span class="note">← FastAPI app + CORS</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">config.py</span>&nbsp;&nbsp;<span class="note">← pydantic-settings reads .env</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">models.py</span>&nbsp;&nbsp;<span class="note">← all Pydantic schemas</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="file">run.py</span>&nbsp;&nbsp;<span class="note">← uvicorn entry (Windows asyncio fix)</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="file">.env.example</span>&nbsp;&nbsp;<span class="note">← copy → .env, add API key</span><br>
+        <br>
+        &nbsp;&nbsp;<span class="dir">frontend/src/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="file">App.tsx</span>&nbsp;&nbsp;<span class="note">← root: two-panel layout</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">components/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">CrawlPanel/</span>&nbsp;&nbsp;<span class="note">← URL form, progress bar, session list</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">ChatPanel/</span>&nbsp;&nbsp;<span class="note">← message bubbles, streaming, citations</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">hooks/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">useCrawl.ts</span>&nbsp;&nbsp;<span class="note">← start crawl + SSE progress</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">useChat.ts</span>&nbsp;&nbsp;<span class="note">← send message + stream tokens</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">useSessions.ts</span>&nbsp;&nbsp;<span class="note">← list / delete sessions</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="file">store/appStore.ts</span>&nbsp;&nbsp;<span class="note">← Zustand global state</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="file">types/index.ts</span>&nbsp;&nbsp;<span class="note">← TypeScript interfaces</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="file">index.css</span>&nbsp;&nbsp;<span class="note">← Tailwind v4 + custom theme</span><br>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- The 3 pipelines -->
+    <div class="section">
+      <p class="section-label">How it works</p>
+      <h2>Three pipelines</h2>
+
+      <!-- Crawl -->
+      <div class="card" style="margin-bottom: 28px;">
+        <div class="card-title">🕷️ Crawl pipeline <span class="tag">backend</span></div>
+        <p style="margin-bottom:14px;">Triggered when you submit a URL. Runs as a background task so the API responds immediately.</p>
+        <div class="pipeline">
+          <div class="pipe-step"><div class="icon">🌐</div><div class="label">URL in</div><div class="sub">seed URL</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">🎭</div><div class="label">Playwright</div><div class="sub">BFS crawl</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">✂️</div><div class="label">Extract</div><div class="sub">strip nav/ads</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">🧩</div><div class="label">Chunk</div><div class="sub">500 chars</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">📐</div><div class="label">Embed</div><div class="sub">384-dim vecs</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">🗄️</div><div class="label">Store</div><div class="sub">hnswlib</div></div>
+        </div>
+        <p>Progress is streamed to the browser via <code>EventSource</code> (SSE) the whole time.</p>
+      </div>
+
+      <!-- Chat / RAG -->
+      <div class="card" style="margin-bottom: 28px;">
+        <div class="card-title">💬 Chat pipeline — RAG <span class="tag">backend</span></div>
+        <p style="margin-bottom:14px;"><strong>RAG = Retrieval-Augmented Generation.</strong> Instead of asking an LLM from memory, we fetch relevant chunks from the vector store first, then feed those as context — so every answer is grounded in the actual website content.</p>
+        <div class="pipeline">
+          <div class="pipe-step"><div class="icon">❓</div><div class="label">Question</div><div class="sub">user message</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">📐</div><div class="label">Embed</div><div class="sub">query vector</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">🔍</div><div class="label">Retrieve</div><div class="sub">top-5 chunks</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">📝</div><div class="label">Prompt</div><div class="sub">+ brand voice</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">✨</div><div class="label">LLM</div><div class="sub">stream tokens</div></div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step"><div class="icon">🔗</div><div class="label">Sources</div><div class="sub">cite pages</div></div>
+        </div>
+        <div class="highlight">
+          The system prompt has a hard rule: <strong>answer only from the CONTEXT chunks</strong>.
+          If the context doesn't cover it, the AI says so — no hallucination.
+        </div>
+      </div>
+
+      <!-- Brand analysis -->
+      <div class="card">
+        <div class="card-title">🎨 Brand analysis <span class="tag">bonus step</span></div>
+        <p>After indexing, the first 5 pages are sampled and sent to the LLM to extract a brand profile — formality level, key terms, writing patterns, voice summary. This is then injected into every chat system prompt so answers sound like the site, not like a generic chatbot.</p>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Tech stack -->
+    <div class="section">
+      <p class="section-label">Tech stack</p>
+      <h2>Everything used</h2>
+      <p>Chosen to keep everything local — no cloud vector DBs, no paid embeddings.</p>
+
+      <div class="tech-grid">
+        <div class="tech-card">
+          <div class="name">FastAPI</div>
+          <div class="role">Backend framework</div>
+          <p>Async Python API with SSE streaming for both crawl progress and chat tokens.</p>
+        </div>
+        <div class="tech-card">
+          <div class="name">Playwright</div>
+          <div class="role">Web crawler</div>
+          <p>Real Chromium browser — renders JS-heavy SPAs, handles dynamic content.</p>
+        </div>
+        <div class="tech-card">
+          <div class="name">hnswlib</div>
+          <div class="role">Vector store</div>
+          <p>Local HNSW index — fast approximate nearest-neighbour search, zero cloud cost.</p>
+        </div>
+        <div class="tech-card">
+          <div class="name">sentence-transformers</div>
+          <div class="role">Embeddings</div>
+          <p><code>all-MiniLM-L6-v2</code> — 384-dim semantic vectors, runs entirely on CPU.</p>
+        </div>
+        <div class="tech-card">
+          <div class="name">xAI / Grok</div>
+          <div class="role">LLM</div>
+          <p>Powers chat responses and brand analysis via an OpenAI-compatible streaming API.</p>
+        </div>
+        <div class="tech-card">
+          <div class="name">React + Vite</div>
+          <div class="role">Frontend</div>
+          <p>TypeScript, Tailwind v4, component-first. Vite proxies <code>/api</code> to FastAPI.</p>
+        </div>
+        <div class="tech-card">
+          <div class="name">Zustand</div>
+          <div class="role">State management</div>
+          <p>Lightweight global store for sessions, active chat, and streaming message state.</p>
+        </div>
+        <div class="tech-card">
+          <div class="name">SSE (EventSource)</div>
+          <div class="role">Streaming protocol</div>
+          <p>Server-Sent Events stream crawl progress and chat tokens in real-time — no WebSockets needed.</p>
+        </div>
+        <div class="tech-card">
+          <div class="name">pydantic-settings</div>
+          <div class="role">Config</div>
+          <p>Typed environment variable loading from <code>.env</code> — API keys never touch the code.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Key design decisions -->
+    <div class="section">
+      <p class="section-label">Design decisions</p>
+      <h2>Why these choices?</h2>
+
+      <div class="card">
+        <div class="card-title">BFS crawl with Playwright <span class="tag">crawler</span></div>
+        <p>Simple <code>fetch()</code> misses JS-rendered sites (React, Vue, Angular apps). Playwright runs a real browser so anything a human can see, the crawler can read. BFS keeps crawl order predictable and depth-bounded.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Recursive text chunking <span class="tag">indexer</span></div>
+        <p>Splits on <code>\n\n → \n → ". " → " "</code> hierarchy with 500-char chunks and 100-char overlap. The overlap ensures a sentence cut across chunk boundaries can still be retrieved by either half.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">hnswlib over a cloud DB <span class="tag">indexer</span></div>
+        <p>Everything is local. No Pinecone account, no network latency, no data leaving the machine. Each crawl session gets its own HNSW index file on disk — delete a session, delete the file.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Fetch-based SSE for chat <span class="tag">frontend</span></div>
+        <p>Chat uses <code>fetch()</code> with a ReadableStream instead of <code>EventSource</code>, because <code>EventSource</code> only supports GET requests. This lets us POST the full conversation history.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">AbortController + 60s timeout <span class="tag">frontend</span></div>
+        <p>Every chat request is wired to an AbortController. If the stream stalls for 60 seconds or the user navigates away, the request is cleanly cancelled and <code>isStreaming</code> always resets — no stuck spinners.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Tracking param stripping <span class="tag">crawler</span></div>
+        <p>URLs with <code>?utm_source=twitter</code> and <code>?utm_source=email</code> are the same page. Stripping known tracking params (<code>utm_*</code>, <code>fbclid</code>, <code>gclid</code>, etc.) before deduplication prevents crawling the same page 10 times.</p>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- API reference -->
+    <div class="section">
+      <p class="section-label">API reference</p>
+      <h2>Endpoints</h2>
+
+      <div class="card">
+        <div class="card-title"><code>POST /api/crawl</code></div>
+        <p>Start a crawl. Body: <code>{ url, max_pages, max_depth }</code>. Returns <code>{ job_id, session_id, status }</code> immediately — crawl runs in background.</p>
+      </div>
+      <div class="card">
+        <div class="card-title"><code>GET /api/crawl/{job_id}/status</code></div>
+        <p>SSE stream. Emits <code>{ type: "progress", status, pages_crawled, pages_total, current_url }</code> until <code>status</code> is <code>"complete"</code> or <code>"error"</code>.</p>
+      </div>
+      <div class="card">
+        <div class="card-title"><code>POST /api/chat</code></div>
+        <p>SSE stream. Body: <code>{ session_id, message, conversation_history }</code>. Emits <code>token</code> → <code>sources</code> → <code>done</code> events.</p>
+      </div>
+      <div class="card">
+        <div class="card-title"><code>GET /api/sessions</code></div>
+        <p>Returns list of all indexed sessions: <code>{ session_id, site_url, site_name, pages_indexed, chunks_indexed, created_at }</code>.</p>
+      </div>
+      <div class="card">
+        <div class="card-title"><code>DELETE /api/sessions/{session_id}</code></div>
+        <p>Removes the session from <code>sessions.json</code> and deletes the hnswlib index from disk.</p>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Quick start -->
+    <div class="section">
+      <p class="section-label">Getting started</p>
+      <h2>Run it locally</h2>
+      <div class="card">
+        <p style="margin-bottom:10px;"><strong>Backend</strong></p>
+        <p><code>cd backend</code> → copy <code>.env.example</code> to <code>.env</code> → add your xAI key → <code>pip install -r requirements.txt</code> → <code>playwright install chromium</code> → <code>python run.py</code></p>
+      </div>
+      <div class="card">
+        <p style="margin-bottom:10px;"><strong>Frontend</strong></p>
+        <p><code>cd frontend</code> → <code>npm install</code> → <code>npm run dev</code> → open <code>localhost:5173</code></p>
+      </div>
+      <div class="highlight">
+        Or just run <code>./start.sh</code> from the repo root to start both at once.
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <div class="container">
+      built with ♥ · website chat · crawl · index · converse
+    </div>
+  </footer>
+
+</body>
+</html>
